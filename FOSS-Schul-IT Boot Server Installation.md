@@ -154,7 +154,7 @@
    ```bash
    SERVERS="192.168.1.1"        # Replace <YOUR_DEFAULT_GATEWAY> with your the routers default gateway
    INTERFACES="eth0"            # Your VM-Network interface
-   OPTIONS="-option 66 <TFTP-IP>"
+   OPTIONS=""
    ```
 3. Starten des DHCP-Relay-Dienstes
    ```bash
