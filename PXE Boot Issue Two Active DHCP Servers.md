@@ -1,256 +1,49 @@
-# PXE Boot and Network Setup Guide on Debian 12 in VirtualBox
+# PXE Boot Issue: Two Active DHCP Servers
 
-## Prepositions
-1. **Disable DHCP on Your Router**:
-   - Your router's DHCP server must be disabled to avoid conflicts, even with correct IP ranges, as it can cause issues.
-2. **ISO Used**:
-   - Tested with `debian-12.8.0-amd64-netinst.iso`. Other ISOs should also work.
+The issue arises because there are **two active DHCP servers** on your network: one on your **router** and another on your **Debian system**. This creates conflicts when a PXE client tries to request an IP address. Here's a breakdown of the problem:
 
 ---
 
-## 1. VirtualBox Settings
-- **Network**: 
-  - Adapter 1: **Bridged Adapter**
-  - Promiscuous Mode: **Allow All**
-  - Cable Connected: **Checked**
+## Problem Details
+
+### 1. Router's DHCP Settings:
+- Your router's DHCP is configured with the IP range `192.168.1.20` to `192.168.1.254`.
+- It operates on a subnet of `192.168.1.0/24` (subnet mask `255.255.255.0`), which means the router assigns IPs only within this range.
+
+### 2. Debian DHCP Server:
+- Your Debian DHCP server also responds to client DHCP requests. From the logs, it's clear that your Debian server is offering IPs like `192.168.0.30`, which is outside the `192.168.1.0/24` range of your router.
+- The PXE client ends up receiving conflicting offers:
+  - The router DHCP server operates on `192.168.1.0/24`.
+  - The Debian DHCP server operates on `192.168.0.0/16`.
+- When the client requests an IP like `192.168.1.21`, the Debian server detects it as being on the "wrong network" because the Debian server is configured for a broader subnet (`192.168.0.0/16`).
+
+### 3. Conflict:
+- The PXE client alternates between offers from the two DHCP servers, causing failures like `wrong network` and `DHCPNAK`.
 
 ---
 
-## 2. Configure VM (First Boot)
-1. Default configuration for Debian: 
-   - Use all default and guided settings.
-   - Install the bootloader on the same disk.
-   - Choose **GNOME Desktop Environment** and **Minimal Tools** for ease of use (can be uninstalled later).
-2. Reboot and log in with your configured user.
+## Solution Options
+
+### 1. Disable Router's DHCP Server (Preferred for PXE Booting):
+If your PXE clients must receive IPs from your Debian DHCP server, you need to disable the DHCP server on your router.
+
+#### Steps:
+1. Log in to your router's admin interface.
+2. Navigate to the DHCP settings.
+3. Disable DHCP.
+4. Ensure your Debian DHCP server is configured correctly to handle the PXE clients.
 
 ---
 
-## 3. Install VirtualBox Guest Additions
-1. Load guest tools from **Devices → Add Guest Tools**.
-2. Install required tools:
-   ```bash
-   su
-   apt update -y && apt upgrade -y
-   cd /media/cdrom0 # Adjust to your actual media directory
-   apt install build-essential linux-headers-$(uname -r)
-   sh ./VBoxLinuxAdditions.run
-   sudo reboot now
-3. Enable bidirectional clipboard:
-   **Go to Devices → Shared Clipboard → Bidirectional**.
+### 2. Isolate the PXE Boot Network:
+- Use a dedicated VLAN or physical network for PXE booting clients.
+- Assign your Debian DHCP server to this network and ensure the router's DHCP server does not overlap with it.
 
 ---
 
-## 4. Configure User
-1. Enter the terminal and switch to the root user:
-   ```bash
-   su
-2. Install sudo
-   ```bash
-   apt install sudo
-3. Update the PATH environment variable:
-   ```bash
-   export PATH=$PATH:/usr/sbin:/usr/bin
-4. Add the user to the sudo group:
-   ```bash
-   usermod -aG sudo %%%username%%%
-5. Switch to the user:
-   ```bash
-   su %%%username%%%
-
----
-
-## 5. Setup VM Network
-1. Configure a static IP:
-   ```bash
-   sudo nano /etc/network/interfaces
-   ```
-   Add the following configuration:
-   ```bash
-   # The loopback network interface
-   auto lo
-   iface lo inet loopback
-
-   auto enp0s3
-   iface enp0s3 inet static
-       address <YOUR_IPV4_ADDRESS>; # Replace <YOUR_IPV4_ADDRESS> with your machine's IPv4 address
-       netmask 255.255.255.0
-       gateway 192.168.0.1
-       dns-nameservers 192.168.0.1
-   ```
-
-2. Restart networking and reboot:
-   ```bash
-   sudo systemctl restart networking
-   sudo reboot now
-   ```
-3. Check the new configuration:
-   ```bash
-   ip addr
-   ```
-
----
-
-## 5. DHCP Configuration
-1. Install DHCP Server (will produce errors):
-   ```bash
-   sudo apt install isc-dhcp-server
-   ```
-2. Configure DHCP:
-   ```bash
-   sudo nano /etc/dhcp/dhcpd.conf
-   ```
-   Add the following configuration:
-   ```bash
-   default-lease-time 600;
-   max-lease-time 7200;
-   ddns-update-style none;
-   authoritative;
-
-   subnet 192.168.0.0 netmask 255.255.255.0 {
-       range 192.168.0.30 192.168.0.50;
-       option routers 192.168.0.1;
-       option broadcast-address 192.168.0.255;
-       option domain-name-servers 192.168.0.1;
-       next-server <YOUR_IPV4_ADDRESS>; # Replace <YOUR_IPV4_ADDRESS> with your machine's IPv4 address
-
-       if option architecture-type = 00:07 {
-           filename "debian-installer/amd64/bootnetx64.efi";
-       } else {
-           filename "pxelinux.0";
-       }
-   }
-
-   ```
-3. Edit interfaces for DHCP:
-   ```bash
-   sudo nano /etc/default/isc-dhcp-server
-   ```
-   Update:
-   ```bash
-   INTERFACESv4="enp0s3"
-   INTERFACESv6=""
-   ```
-4. Check for errors:
-   ```bash
-   sudo dhcpd -t
-   ```
-5. Restart DHCP Server:
-   ```bash
-   sudo systemctl restart isc-dhcp-server
-   ```
-
----
-
-
-## 7. Check DHCP Connection
-1. Verify using:
-   ```bash
-   sudo dhclient -v enp0s3
-   ```
----
-
-## 8. Install TFTP Server
-1. Install TFTP:
-   ```bash
-   sudo apt install tftpd-hpa
-2. Configure TFTP:
-   ```bash
-   sudo nano /etc/default/tftpd-hpa
-   ```
-   Add:
-   ```bash
-   TFTP_USERNAME="tftp"
-   TFTP_DIRECTORY="/srv/tftp"
-   TFTP_ADDRESS="0.0.0.0:69"
-   TFTP_OPTIONS="--secure"
-   ```
-3. Restart TFTP Server:
-   ```bash
-   sudo systemctl restart tftpd-hpa
-   ```
-   
----
-
-## 9. Install Linux Image Files
-1. Download and extract files:
-   ```bash
-   cd /srv/tftp
-   sudo wget https://deb.debian.org/debian/dists/bookworm/main/installer-amd64/current/images/netboot/netboot.tar.gz
-   sudo tar -xvzf netboot.tar.gz
-   sudo rm netboot.tar.gz
-   ```
-
----
-
-## 10. Set File Permissions
-1. Update permissions:
-   ```bash
-   sudo chown tftp:tftp /srv/tftp
-   sudo chmod 755 /srv/tftp
-   sudo chown -R tftp:tftp /srv/tftp/*
-   sudo chmod -R 755 /srv/tftp/*
-   ```
-
----
-
-## 10. Set File Permissions
-1. Test TFTP:
-   ```bash
-   tftp <YOUR_IPV4_ADDRESS>
-   get pxelinux.0
-   quit
-   ```
-2. Check for the downloaded file.
----
-
-## 12. Install Syslog for Error Handling
-1. Install syslog:
-   ```bash
-   sudo apt install rsyslog -y
-   ```
-2. Enable and use syslog:
-   ```bash
-   sudo systemctl enable rsyslog
-   sudo tail /var/log/syslog
-   ```
-   
----
-
-## 12. Install Syslog for Error Handling
-1. Install syslog:
-   ```bash
-   sudo apt install rsyslog -y
-   ```
-2. Enable and use syslog:
-   ```bash
-   sudo systemctl enable rsyslog
-   sudo tail /var/log/syslog
-   ```
-   
----
-
-## 13. Install Syslog for Error Handling
-1. Install syslog:
-   ```bash
-   sudo apt install rsyslog -y
-   ```
-2. Enable and use syslog:
-   ```bash
-   sudo systemctl enable rsyslog
-   sudo tail /var/log/syslog
-   ```
-   
----
-
-## 14. (Optional) Remove GUI
-1. Completely uninstall GUI:
-   ```bash
-   sudo apt purge gnome* x11* -y
-   sudo apt autoremove -y
-   ```
-2. Reboot into command-line interface.
-   
----
-
-
-
+### 3. Reconfigure Subnet Settings:
+- Change the Debian DHCP server to operate within the same subnet as the router (e.g., `192.168.1.0/24`).
+- Update your Debian DHCP configuration file (`/etc/dhcp/dhcpd.conf`) to use the same range as the router (e.g., `192.168.1.20 - 192.168.1.254`).
+- Restart the Debian DHCP service:
+  ```bash
+  sudo systemctl restart isc-dhcp-server
