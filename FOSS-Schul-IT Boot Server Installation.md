@@ -90,7 +90,7 @@
 
 ---
 
-## 5. DHCP Configuration
+## 6. DHCP Configuration
 1. Install DHCP Server (will produce errors):
    ```bash
    sudo apt install isc-dhcp-server
@@ -141,15 +141,36 @@
 
 ---
 
+## 7. Install DHCP-Relay-Agent
+1. Install using:
+   ```bash
+   sudo apt install isc-dhcp-relay
+   ```
+2. Edit the configuration::
+   ```bash
+   sudo nano /etc/default/isc-dhcp-relay
+   ```
+   Add the following configuration:
+   ```bash
+   SERVERS="192.168.1.1"        # Replace <YOUR_DEFAULT_GATEWAY> with your the routers default gateway
+   INTERFACES="eth0"            # Your VM-Network interface
+   OPTIONS="-option 66 <TFTP-IP>"
+   ```
+3. Starten des DHCP-Relay-Dienstes
+   ```bash
+   sudo systemctl restart isc-dhcp-relay
+   sudo systemctl enable isc-dhcp-relay
+   ```
+---
 
-## 7. Check DHCP Connection
+## 8. Check DHCP Connection
 1. Verify using:
    ```bash
    sudo dhclient -v enp0s3
    ```
 ---
 
-## 8. Install TFTP Server
+## 9. Install TFTP Server
 1. Install TFTP:
    ```bash
    sudo apt install tftpd-hpa
@@ -171,7 +192,7 @@
    
 ---
 
-## 9. Install Linux Image Files
+## 10. Install Linux Image Files
 1. Download and extract files:
    ```bash
    cd /srv/tftp
@@ -182,7 +203,7 @@
 
 ---
 
-## 10. Set File Permissions
+## 12. Set File Permissions
 1. Update permissions:
    ```bash
    sudo chown tftp:tftp /srv/tftp
@@ -191,42 +212,6 @@
    sudo chmod -R 755 /srv/tftp/*
    ```
 
----
-
-## 10. Set File Permissions
-1. Test TFTP:
-   ```bash
-   tftp <YOUR_IPV4_ADDRESS>
-   get pxelinux.0
-   quit
-   ```
-2. Check for the downloaded file.
----
-
-## 12. Install Syslog for Error Handling
-1. Install syslog:
-   ```bash
-   sudo apt install rsyslog -y
-   ```
-2. Enable and use syslog:
-   ```bash
-   sudo systemctl enable rsyslog
-   sudo tail /var/log/syslog
-   ```
-   
----
-
-## 12. Install Syslog for Error Handling
-1. Install syslog:
-   ```bash
-   sudo apt install rsyslog -y
-   ```
-2. Enable and use syslog:
-   ```bash
-   sudo systemctl enable rsyslog
-   sudo tail /var/log/syslog
-   ```
-   
 ---
 
 ## 13. Install Syslog for Error Handling
@@ -241,6 +226,7 @@
    ```
    
 ---
+
 
 ## 14. (Optional) Remove GUI
 1. Completely uninstall GUI:
