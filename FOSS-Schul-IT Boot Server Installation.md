@@ -52,10 +52,10 @@
    export PATH=$PATH:/usr/sbin:/usr/bin
 4. Add the user to the sudo group:
    ```bash
-   usermod -aG sudo %%%username%%%
+   usermod -aG sudo <YOUR_USERNAME>
 5. Switch to the user:
    ```bash
-   su %%%username%%%
+   su <YOUR_USERNAME>
 
 ---
 
@@ -66,13 +66,12 @@
    ```
    Add the following configuration:
    ```bash
-   # The loopback network interface
    auto lo
    iface lo inet loopback
 
    auto enp0s3
    iface enp0s3 inet static
-       address <YOUR_IPV4_ADDRESS>; # Replace <YOUR_IPV4_ADDRESS> with your machine's IPv4 address
+       address <YOUR_IPV4_ADDRESS>;
        netmask 255.255.255.0
        gateway 192.168.0.1
        dns-nameservers 192.168.0.1
@@ -111,7 +110,7 @@
        option routers 192.168.0.1;
        option broadcast-address 192.168.0.255;
        option domain-name-servers 192.168.0.1;
-       next-server <YOUR_IPV4_ADDRESS>; # Replace <YOUR_IPV4_ADDRESS> with your machine's IPv4 address
+       next-server <YOUR_IPV4_ADDRESS>;
 
        if option architecture-type = 00:07 {
            filename "debian-installer/amd64/bootnetx64.efi";
@@ -141,36 +140,7 @@
 
 ---
 
-## 7. Install DHCP-Relay-Agent
-1. Install using:
-   ```bash
-   sudo apt install isc-dhcp-relay
-   ```
-2. Edit the configuration::
-   ```bash
-   sudo nano /etc/default/isc-dhcp-relay
-   ```
-   Add the following configuration:
-   ```bash
-   SERVERS="192.168.1.1"        # Replace <YOUR_DEFAULT_GATEWAY> with your the routers default gateway
-   INTERFACES="eth0"            # Your VM-Network interface
-   OPTIONS=""
-   ```
-3. Starten des DHCP-Relay-Dienstes
-   ```bash
-   sudo systemctl restart isc-dhcp-relay
-   sudo systemctl enable isc-dhcp-relay
-   ```
----
-
-## 8. Check DHCP Connection
-1. Verify using:
-   ```bash
-   sudo dhclient -v enp0s3
-   ```
----
-
-## 9. Install TFTP Server
+## 7. Install TFTP Server
 1. Install TFTP:
    ```bash
    sudo apt install tftpd-hpa
@@ -182,7 +152,7 @@
    ```bash
    TFTP_USERNAME="tftp"
    TFTP_DIRECTORY="/srv/tftp"
-   TFTP_ADDRESS="0.0.0.0:69"
+   TFTP_ADDRESS=":69"
    TFTP_OPTIONS="--secure"
    ```
 3. Restart TFTP Server:
@@ -192,7 +162,7 @@
    
 ---
 
-## 10. Install Linux Image Files
+## 8. Install Linux Image Files
 1. Download and extract files:
    ```bash
    cd /srv/tftp
@@ -203,7 +173,7 @@
 
 ---
 
-## 12. Set File Permissions
+## 9. Set File Permissions
 1. Update permissions:
    ```bash
    sudo chown tftp:tftp /srv/tftp
@@ -214,7 +184,98 @@
 
 ---
 
-## 13. Install Syslog for Error Handling
+### 10. Prepare the Preseed File
+1. Create a file named preseed.cfg and include the necessary configurations. Below is an example for installing Debian with a desktop environment:
+
+   Sample preseed.cfg:
+   ```bash
+   ### Localization
+   d-i debian-installer/locale string en_US.UTF-8
+   d-i console-setup/ask_detect boolean false
+   d-i console-setup/layoutcode string ch
+   d-i keyboard-configuration/xkb-keymap select ch
+   
+   ### Network Configuration
+   d-i netcfg/choose_interface select auto
+   d-i netcfg/get_hostname string debian
+   d-i netcfg/get_domain string local
+   
+   ### Mirror Configuration
+   d-i mirror/country string manual
+   d-i mirror/http/hostname string ftp.ch.debian.org
+   d-i mirror/http/directory string /debian
+   d-i mirror/http/proxy string
+   
+   ### Disk Partitioning
+   d-i partman-auto/method string regular
+   d-i partman-auto/disk string /dev/sda
+   d-i partman-auto/expert_recipe string \
+       boot-root :: \
+           1000 1000 1000 ext4 \
+               $primary{ } $bootable{ } method{ format } format{ } \
+               use_filesystem{ } filesystem{ ext4 } mountpoint{ /boot } \
+           . \
+           10000 10000 10000 ext4 \
+               $primary{ } method{ format } format{ } \
+               use_filesystem{ } filesystem{ ext4 } mountpoint{ / } \
+           . \
+           5000 10000 10000 linux-swap \
+               $primary{ } method{ swap } format{ } \
+           .
+   d-i partman-partitioning/confirm_write_new_label boolean true
+   d-i partman/choose_partition select finish
+   d-i partman/confirm boolean true
+   d-i partman/confirm_nooverwrite boolean true
+   
+   ### User Accounts
+   d-i passwd/root-login boolean true
+   d-i passwd/root-password password debian
+   d-i passwd/root-password-again password debian
+   d-i passwd/make-user boolean true
+   d-i passwd/user-fullname string Debian User
+   d-i passwd/username string debian
+   d-i passwd/user-password password debian
+   d-i passwd/user-password-again password debian
+   d-i passwd/user-default-groups string sudo
+   d-i user-setup/encrypt-home boolean false
+   
+   ### Task Selection
+   tasksel tasksel/first multiselect standard
+   d-i pkgsel/include string gnome-core sssd libpam-sss libnss-sss ldap-utils nscd libsss-sudo
+   
+   ### LDAP
+   
+   ### Bootloader Installation
+   d-i grub-installer/only_debian boolean true
+   d-i grub-installer/with_other_os boolean true
+   d-i grub-installer/bootdev string /dev/sda
+   
+   ### Finishing Up
+   d-i finish-install/reboot_in_progress note
+   d-i debian-installer/exit/poweroff boolean true
+   
+   ```
+2. Configure the PXE Server to Use the Preseed File
+   Modify the PXE boot menu file (e.g., pxelinux.cfg/default) to append the preseed file to the kernel arguments.
+
+   Example PXE Boot Menu Entry:
+   ```bash
+   label Install Debian with Preseed
+       menu label ^Install Debian with Preseed
+       kernel debian-installer/amd64/linux
+       append initrd=debian-installer/amd64/initrd.gz auto=true priority=critical preseed/url=http://<YOUR_IPV4_ADDRESS>/preseed.cfg
+
+   ```
+3. Provide the Preseed File via HTTP
+   Ensure your preseed file is available to clients during installation:
+
+   Use a web server (e.g., Apache or Nginx) to serve the preseed file.
+   Place the preseed.cfg file in the web server's document root (e.g., /var/www/html).
+
+   Test the PXE Boot!
+   ---
+
+## 11. (Optional) Install Syslog for Error Handling
 1. Install syslog:
    ```bash
    sudo apt install rsyslog -y
@@ -227,8 +288,7 @@
    
 ---
 
-
-## 14. (Optional) Remove GUI
+## 12. (Optional) Remove GUI
 1. Completely uninstall GUI:
    ```bash
    sudo apt purge gnome* x11* -y
