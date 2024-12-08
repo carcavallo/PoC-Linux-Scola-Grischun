@@ -111,12 +111,7 @@
        option broadcast-address 192.168.0.255;
        option domain-name-servers 192.168.0.1;
        next-server <YOUR_IPV4_ADDRESS>;
-
-       if option architecture-type = 00:07 {
-           filename "debian-installer/amd64/bootnetx64.efi";
-       } else {
-           filename "pxelinux.0";
-       }
+       filename "pxelinux.0";
    }
 
    ```
