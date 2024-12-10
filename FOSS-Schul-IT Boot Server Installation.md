@@ -179,6 +179,185 @@
 
 ---
 
+## 10. Install and configure LDAP with Kerberos
+1. Installation:
+   ```bash
+   sudo apt install slapd ldap-utils
+   ```
+   During the installation, you’ll be prompted to set an admin password for the LDAP directory. If not prompted, reconfigure the package:
+   ```bash
+   sudo dpkg-reconfigure slapd
+   ```
+   Key settings during reconfiguration:
+   
+   Skip the configuration database.
+   
+   Use your domain as the Base DN (e.g., dc=school,dc=local).
+
+   Set an admin password.
+
+2. Verify LDAP Installation:
+   Check if the LDAP server is running:
+   ```bash
+   sudo systemctl status slapd
+   ```
+   Test connectivity:
+   ```bash
+   ldapsearch -x -H ldap://localhost -b dc=school,dc=local
+   ```
+
+3. Load Required LDAP Schemas:
+   To support POSIX accounts and enterprise logins, load the following schemas:
+   ```bash
+   sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/ldap/schema/cosine.ldif
+   sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/ldap/schema/nis.ldif
+   sudo ldapadd -Y EXTERNAL -H ldapi:/// -f /etc/ldap/schema/inetorgperson.ldif
+   ```
+
+4. Add Base Structure to LDAP
+   Create a file called base.ldif with the following content:
+   ```bash
+   dn: ou=People,dc=school,dc=local
+   objectClass: organizationalUnit
+   ou: People
+   
+   dn: ou=Groups,dc=school,dc=local
+   objectClass: organizationalUnit
+   ou: Groups
+   ```
+   Add the base structure:
+   ```bash
+   ldapadd -x -D cn=admin,dc=school,dc=local -W -f base.ldif
+   ```
+   
+5. Add Users and Groups
+   Add an example user:
+   ```bash
+   dn: uid=johndoe,ou=People,dc=school,dc=local
+   objectClass: inetOrgPerson
+   objectClass: posixAccount
+   objectClass: shadowAccount
+   cn: John Doe
+   sn: Doe
+   uid: johndoe
+   uidNumber: 1000
+   gidNumber: 1000
+   homeDirectory: /home/johndoe
+   loginShell: /bin/bash
+   userPassword: {SSHA}<encrypted-password>
+   ```
+   Add this user to the database:
+   ```bash
+   ldapadd -x -D cn=admin,dc=school,dc=local -W -f user.ldif
+   ```
+   Encrypt passwords for LDAP:
+   ```bash
+   slappasswd
+   ```
+
+6. Test LDAP:
+   Ensure the user can be searched:
+   ```bash
+   ldapsearch -x -D cn=admin,dc=school,dc=local -W -b dc=school,dc=local "(uid=johndoe)"
+   ```
+
+7. Install Kerberos Server
+   ```bash
+   sudo apt install krb5-kdc krb5-admin-server
+   ```
+   
+8. Configure Kerberos
+   Edit /etc/krb5.conf to include your realm:
+   ```bash
+   [libdefaults]
+    default_realm = SCHOOL.LOCAL
+    dns_lookup_realm = false
+    dns_lookup_kdc = false
+
+   [realms]
+       SCHOOL.LOCAL = {
+           kdc = ldap.school.local
+           admin_server = ldap.school.local
+       }
+   
+   [domain_realm]
+       .school.local = SCHOOL.LOCAL
+       school.local = SCHOOL.LOCAL
+   ```
+
+7. Set Up the Kerberos Database
+   Initialize the Kerberos database:
+   ```bash
+   sudo kdb5_util create -s
+   ```
+   Create a principal for your LDAP server:
+   ```bash
+   sudo kadmin.local -q "addprinc -randkey ldap/ldap.school.local"
+   sudo kadmin.local -q "ktadd ldap/ldap.school.local"
+   ```
+   Start the services:
+   ```bash
+   sudo systemctl start krb5-kdc
+   sudo systemctl enable krb5-kdc
+   ```
+   Create the Kerberos Admin Account:
+   ```bash
+   sudo nano /etc/krb5kdc/kadm5.acl
+   ```
+   Add:
+   ```bash
+   */admin@SCHOOL.LOCAL   *
+   ```
+   Restart the Admin Service:
+   ```bash
+   sudo systemctl start krb5-admin-server
+   sudo systemctl enable krb5-admin-server
+   ```
+   Install dnsmasq for DNS Configuration:
+   ```bash
+   sudo apt install dnsmasq
+   ```
+   Configure dnsmasq:
+   ```bash
+   sudo nano /etc/dnsmasq.conf
+   ```
+   Add:
+   ```bash
+   # Custom domain configuration for school.local
+   domain=school.local
+   expand-hosts
+   
+   # Bind dnsmasq to the local interface
+   listen-address=127.0.0.1
+   server=8.8.8.8
+   server=192.168.1.1
+   
+   # DNS server for school.local
+   address=/school.local/192.168.1.48
+   address=/ldap.school.local/192.168.1.48
+   
+   # SRV records for Kerberos and LDAP
+   srv-host=_kerberos._udp.school.local,ldap.school.local,88
+   srv-host=_kerberos._tcp.school.local,ldap.school.local,88
+   srv-host=_kpasswd._udp.school.local,ldap.school.local,464
+   srv-host=_kerberos-adm._tcp.school.local,ldap.school.local,749
+   srv-host=_ldap._tcp.school.local,ldap.school.local,389
+   ```
+   Restart dnsmasq:
+   ```bash
+   sudo systemctl restart dnsmasq
+   ```
+   Edit /etc/resolv.conf:
+   Add:
+   ```bash
+   nameserver 127.0.0.1
+   ```
+   Prevent resolv.conf from being overwritten (optional but recommended):
+   ```bash
+   sudo chattr +i /etc/resolv.conf
+   ```
+---
+
 ### 10. Prepare the Preseed File
 1. Create a file named preseed.cfg and include the necessary configurations. Below is an example for installing Debian with a desktop environment:
 
@@ -222,23 +401,23 @@
    d-i partman/confirm boolean true
    d-i partman/confirm_nooverwrite boolean true
    
-   ### User Accounts
-   d-i passwd/root-login boolean true
-   d-i passwd/root-password password debian
-   d-i passwd/root-password-again password debian
-   d-i passwd/make-user boolean true
-   d-i passwd/user-fullname string Debian User
-   d-i passwd/username string debian
-   d-i passwd/user-password password debian
-   d-i passwd/user-password-again password debian
-   d-i passwd/user-default-groups string sudo
-   d-i user-setup/encrypt-home boolean false
-   
    ### Task Selection
    tasksel tasksel/first multiselect standard
    d-i pkgsel/include string gnome-core sssd libpam-sss libnss-sss ldap-utils nscd libsss-sudo
    
-   ### LDAP
+   # Configure LDAP for user authentication
+   d-i passwd/root-login boolean false
+   d-i passwd/make-user boolean false
+   
+   # LDAP client configuration
+   d-i pkgsel/include string ldap-auth-client ldap-auth-config
+   d-i ldap-auth-config/ldap-server string ldap://ldap.school.local
+   d-i ldap-auth-config/ldap-base-dn string dc=school,dc=local
+   d-i ldap-auth-config/ldap-bind-dn string cn=admin,dc=school,dc=local
+   d-i ldap-auth-config/ldap-bind-password password <admin-password>
+   d-i ldap-auth-config/ldap-version select 3
+   d-i ldap-auth-config/ldap-scope select sub
+   d-i ldap-auth-config/ldap-auth-client-config boolean true
    
    ### Bootloader Installation
    d-i grub-installer/only_debian boolean true
@@ -248,7 +427,6 @@
    ### Finishing Up
    d-i finish-install/reboot_in_progress note
    d-i debian-installer/exit/poweroff boolean true
-   
    ```
 2. Configure the PXE Server to Use the Preseed File
    Modify the PXE boot menu file (e.g., pxelinux.cfg/default) to append the preseed file to the kernel arguments.
