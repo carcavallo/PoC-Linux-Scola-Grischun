@@ -71,10 +71,10 @@
 
    auto enp0s3
    iface enp0s3 inet static
-       address <YOUR_IPV4_ADDRESS>;
+       address <DESIRED_IPV4_ADDRESS>
        netmask 255.255.255.0
-       gateway 192.168.0.1
-       dns-nameservers 192.168.0.1
+       gateway 192.168.1.1
+       dns-nameservers 8.8.8.8
    ```
 
 2. Restart networking and reboot:
@@ -105,11 +105,11 @@
    ddns-update-style none;
    authoritative;
 
-   subnet 192.168.0.0 netmask 255.255.255.0 {
-       range 192.168.0.30 192.168.0.50;
-       option routers 192.168.0.1;
-       option broadcast-address 192.168.0.255;
-       option domain-name-servers 192.168.0.1;
+   subnet 192.168.1.0 netmask 255.255.255.0 {
+       range 192.168.1.150 192.168.1.200;
+       option routers 192.168.1.1;
+       option broadcast-address 192.168.1.255;
+       option domain-name-servers 192.168.1.1;
        next-server <YOUR_IPV4_ADDRESS>;
        filename "pxelinux.0";
    }
