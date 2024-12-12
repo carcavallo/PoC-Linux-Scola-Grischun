@@ -1,4 +1,4 @@
-# PXE Boot and Network Setup Guide on Debian 12 in VirtualBox
+# FOSS-Schul-IT Boot Server Installation
 
 ## Prepositions
 1. **Disable DHCP on Your Router**:
