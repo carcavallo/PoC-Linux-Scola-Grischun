@@ -372,7 +372,8 @@
    ### Network Configuration
    d-i netcfg/choose_interface select auto
    d-i netcfg/get_hostname string debian
-   d-i netcfg/get_domain string local
+   d-i netcfg/get_domain string school.local
+   d-i netcfg/get_nameservers string 192.168.1.48
    
    ### Mirror Configuration
    d-i mirror/country string manual
@@ -401,23 +402,15 @@
    d-i partman/confirm boolean true
    d-i partman/confirm_nooverwrite boolean true
    
-   ### Task Selection
-   tasksel tasksel/first multiselect standard
-   d-i pkgsel/include string gnome-core sssd libpam-sss libnss-sss ldap-utils nscd libsss-sudo
-   
-   # Configure LDAP for user authentication
-   d-i passwd/root-login boolean false
+   ### Root Account Setup
+   d-i passwd/root-login boolean true
+   d-i passwd/root-password password debian
+   d-i passwd/root-password-again password debian
    d-i passwd/make-user boolean false
    
-   # LDAP client configuration
-   d-i pkgsel/include string ldap-auth-client ldap-auth-config
-   d-i ldap-auth-config/ldap-server string ldap://ldap.school.local
-   d-i ldap-auth-config/ldap-base-dn string dc=school,dc=local
-   d-i ldap-auth-config/ldap-bind-dn string cn=admin,dc=school,dc=local
-   d-i ldap-auth-config/ldap-bind-password password <admin-password>
-   d-i ldap-auth-config/ldap-version select 3
-   d-i ldap-auth-config/ldap-scope select sub
-   d-i ldap-auth-config/ldap-auth-client-config boolean true
+   ### Task Selection
+   tasksel tasksel/first multiselect standard
+   d-i pkgsel/include string ldap-utils nscd krb5-user
    
    ### Bootloader Installation
    d-i grub-installer/only_debian boolean true
@@ -426,7 +419,7 @@
    
    ### Finishing Up
    d-i finish-install/reboot_in_progress note
-   d-i debian-installer/exit/poweroff boolean true
+
    ```
 2. Configure the PXE Server to Use the Preseed File
    Modify the PXE boot menu file (e.g., pxelinux.cfg/default) to append the preseed file to the kernel arguments.
