@@ -9,15 +9,15 @@
    ```bash
    192.168.1.48                ldap.school.local
    ```
-
+   
+---
 
 ## 2. Install Required Packages
 1. Install sssd, libnss-sss, libpam-sss, and other required packages:
- ```bash
- sudo apt update
- sudo apt install sssd libnss-sss libpam-sss libpam-krb5
- ```
-
+    ```bash
+    sudo apt update
+    sudo apt install sssd libnss-sss libpam-sss libpam-krb5
+    ```
 2. Create or edit the SSSD configuration file /etc/sssd/sssd.conf:
  ```bash
  sudo nano /etc/sssd/sssd.conf
@@ -43,6 +43,8 @@ Set the correct permissions and restart the service:
  sudo chmod 600 /etc/sssd/sssd.conf
  sudo systemctl restart sssd
  ```
+---
+
 ## 3. Update PAM and NSS Configuration
 1. Update PAM and NSS Configuration:
    Update /etc/nsswitch.conf:
@@ -55,7 +57,10 @@ Set the correct permissions and restart the service:
     sudo pam-auth-update
    ```
     Select "SSSD" and "Kerberos authentication".
-## 3. Test LDAP and Kerberos
+
+---
+
+## 4. Test LDAP and Kerberos
 Test LDAP integration:
   ```bash
   getent passwd johndoe
